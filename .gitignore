@@ -22,4 +22,4 @@ bin/
 .config/
 .gitconfig
 .wget-hsts
-
+snap/

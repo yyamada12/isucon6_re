@@ -87,9 +87,12 @@ func main() {
 	}
 	user := os.Getenv("ISUTAR_DB_USER")
 	if user == "" {
-		user = "root"
+		user = "isucon"
 	}
 	password := os.Getenv("ISUTAR_DB_PASSWORD")
+	if password == "" {
+		password = "isucon"
+	}
 	dbname := os.Getenv("ISUTAR_DB_NAME")
 	if dbname == "" {
 		dbname = "isutar"

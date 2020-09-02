@@ -8,6 +8,9 @@ bin/
 /webapp/go/src/
 /webapp/go/pkg/
 /webapp/go/bin/
+/go/src/
+/go/pkg/
+/go/bin/
 snap/
 .*
 !.gitignore

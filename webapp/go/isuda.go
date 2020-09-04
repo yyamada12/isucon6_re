@@ -9,6 +9,7 @@ import (
 	"fmt"
 	"html"
 	"html/template"
+	"io/ioutil"
 	"log"
 	"math"
 	"net/http"
@@ -17,6 +18,7 @@ import (
 	"regexp"
 	"strconv"
 	"strings"
+	"unsafe"
 
 	"github.com/Songmu/strrand"
 	_ "github.com/go-sql-driver/mysql"
@@ -96,7 +98,7 @@ func topHandler(w http.ResponseWriter, r *http.Request) {
 	page, _ := strconv.Atoi(p)
 
 	rows, err := db.Query(fmt.Sprintf(
-		"SELECT * FROM entry ORDER BY updated_at DESC LIMIT %d OFFSET %d",
+		"SELECT keyword FROM entry ORDER BY updated_at DESC LIMIT %d OFFSET %d",
 		perPage, perPage*(page-1),
 	))
 	if err != nil && err != sql.ErrNoRows {
@@ -105,9 +107,28 @@ func topHandler(w http.ResponseWriter, r *http.Request) {
 	entries := make([]*Entry, 0, 10)
 	for rows.Next() {
 		e := Entry{}
-		err := rows.Scan(&e.ID, &e.AuthorID, &e.Keyword, &e.Description, &e.UpdatedAt, &e.CreatedAt)
+		err := rows.Scan(&e.Keyword)
 		panicIf(err)
-		e.Html = htmlify(w, r, e.Description)
+		filename := "/home/isucon/webapp/public/html/" + e.Keyword + ".html"
+		if _, err := os.Stat(filename); err == nil {
+			data, err := ioutil.ReadFile(filename)
+			if err != nil {
+				println(err)
+			}
+			e.Html = *(*string)(unsafe.Pointer(&data))
+		} else {
+			row := db.QueryRow(`SELECT description FROM entry WHERE keyword = ?`, e.Keyword)
+			err = row.Scan(&e.Description)
+			if err == sql.ErrNoRows {
+				notFound(w)
+				return
+			}
+			e.Html = htmlify(w, r, e.Description)
+			err := ioutil.WriteFile(filename, []byte(e.Html), 0666)
+			if err != nil {
+				println(err)
+			}
+		}
 		e.Stars = loadStars(e.Keyword)
 		entries = append(entries, &e)
 	}
@@ -260,16 +281,30 @@ func keywordByKeywordHandler(w http.ResponseWriter, r *http.Request) {
 	if err != nil {
 		println(err)
 	}
-	row := db.QueryRow(`SELECT * FROM entry WHERE keyword = ?`, keyword)
+
+	filename := "/home/isucon/webapp/public/html/" + keyword + ".html"
 	e := Entry{}
-	err = row.Scan(&e.ID, &e.AuthorID, &e.Keyword, &e.Description, &e.UpdatedAt, &e.CreatedAt)
-	if err == sql.ErrNoRows {
-		println(keyword)
-		println(err)
-		notFound(w)
-		return
+	if _, err := os.Stat(filename); err == nil {
+		data, err := ioutil.ReadFile(filename)
+		if err != nil {
+			println(err)
+		}
+		e.Html = *(*string)(unsafe.Pointer(&data))
+	} else {
+
+		row := db.QueryRow(`SELECT * FROM entry WHERE keyword = ?`, keyword)
+		err = row.Scan(&e.ID, &e.AuthorID, &e.Keyword, &e.Description, &e.UpdatedAt, &e.CreatedAt)
+		if err == sql.ErrNoRows {
+			notFound(w)
+			return
+		}
+		e.Html = htmlify(w, r, e.Description)
+		err := ioutil.WriteFile(filename, []byte(e.Html), 0666)
+		if err != nil {
+			println(err)
+		}
 	}
-	e.Html = htmlify(w, r, e.Description)
+
 	e.Stars = loadStars(e.Keyword)
 
 	re.HTML(w, http.StatusOK, "keyword", struct {
